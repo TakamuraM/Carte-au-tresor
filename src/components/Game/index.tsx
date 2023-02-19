@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react"
+import React, { useCallback, useEffect, useRef, useState } from "react"
 import { Box, Button, Grid, Stack, Typography } from "@mui/material"
 
 import { Adventurer, Coordinates } from "../../types"
@@ -16,6 +16,7 @@ const Game = () => {
   const { adventurers } = useAppSelector((state) => state.adventurers)
   const dispatch = useAppDispatch()
 
+  const [isPlaying, setIsPlaying] = useState(false)
   const [logs, setLogs] = useState<string[]>([])
   const boxRef = useRef<HTMLDivElement>(null)
 
@@ -25,16 +26,6 @@ const Game = () => {
       boxRef.current.scrollTop = boxRef.current.scrollHeight
     }
   }, [logs])
-
-  /**
-   * Game player
-   */
-  const play = () => {
-    const currentPlayer = adventurers[playerTurn]
-
-    parseMovement(currentPlayer)
-    dispatch(nextTurn())
-  }
 
   /**
    * Sets player next orientation depending on current orientation
@@ -61,143 +52,185 @@ const Game = () => {
   }
 
   /**
-   * Determines which action the player has to do (move/orientation)
-   * @param currentPlayer player whose turn it is
-   */
-  const parseMovement = (currentPlayer: Adventurer): void => {
-    const { movements } = currentPlayer
-    let message = ""
-    let newOrientation = ""
-
-    if (!movements[gameTurn]) return
-
-    switch (movements[gameTurn]) {
-      case "D":
-        newOrientation = setOrientation(currentPlayer.orientation, "D")
-        dispatch(turnAdventurer({ adventurer: currentPlayer, newOrientation }))
-        message = `${currentPlayer.name} s'oriente sur sa droite`
-        break
-      case "G":
-        newOrientation = setOrientation(currentPlayer.orientation, "G")
-        dispatch(turnAdventurer({ adventurer: currentPlayer, newOrientation }))
-        message = `${currentPlayer.name} s'oriente sur sa gauche`
-        break
-      case "A":
-        setNextMovement(currentPlayer)
-        break
-      default:
-        message = `${currentPlayer.name} tente un mouvement non autorisé`
-        break
-    }
-
-    if (message !== "") {
-      setLogs((prev) => [...prev, message])
-    }
-  }
-
-  /**
    * Checks if next step is a valid movement or not
    * @param step nex step
    * @returns if movement is valid or not
    */
-  const isMovementValid = (step: Coordinates): Boolean => {
-    const { row, column } = step
+  const isMovementValid = useCallback(
+    (step: Coordinates): Boolean => {
+      const { row, column } = step
 
-    if (row > height - 1 || row < 0) {
-      return false
-    } else if (column > width - 1 || column < 0) {
-      return false
-    } else if (map[row][column].type === "mountain") {
-      return false
-    } else if (map[row][column].adventurer) {
-      return false
-    }
+      if (row > height - 1 || row < 0) {
+        return false
+      } else if (column > width - 1 || column < 0) {
+        return false
+      } else if (map[row][column].type === "mountain") {
+        return false
+      } else if (map[row][column].adventurer) {
+        return false
+      }
 
-    return true
-  }
+      return true
+    },
+    [height, map, width]
+  )
 
   /**
    * Checks if player will step into a treasure
    * @param step next movement
    * @returns if there is a treasure or not
    */
-  const isOnTreasure = (step: Coordinates): Boolean => {
-    const { row, column } = step
+  const isOnTreasure = useCallback(
+    (step: Coordinates): Boolean => {
+      const { row, column } = step
 
-    if (map[row][column].type === "treasure") {
-      return map[row][column].treasureCount! > 0
-    }
+      if (map[row][column].type === "treasure") {
+        return map[row][column].treasureCount! > 0
+      }
 
-    return false
-  }
-
-  /**
-   * Determines which step the player will do according to its orientation
-   * @param player current player
-   */
-  const setNextMovement = (player: Adventurer): void => {
-    let message = ""
-    let step: Coordinates = { row: 0, column: 0 }
-
-    switch (player.orientation) {
-      case "N":
-        step = { row: player.pos.row - 1, column: player.pos.column }
-        if (!isMovementValid(step)) {
-          message = `${player.name} ne peut pas s'avancer vers le haut`
-        } else {
-          message = `${player.name} s'est avancé vers le haut\n`
-        }
-        break
-      case "E":
-        step = { row: player.pos.row, column: player.pos.column + 1 }
-        if (!isMovementValid(step)) {
-          message = `${player.name} ne peut pas s'avancer vers la droite`
-        } else {
-          message = `${player.name} s'est avancé vers la droite\n`
-        }
-        break
-      case "S":
-        step = { row: player.pos.row + 1, column: player.pos.column }
-        if (!isMovementValid(step)) {
-          message = `${player.name} ne peut pas s'avancer vers le bas`
-        } else {
-          message = `${player.name} s'est avancé vers le bas\n`
-        }
-        break
-      case "W":
-        step = { row: player.pos.row, column: player.pos.column - 1 }
-        if (!isMovementValid(step)) {
-          message = `${player.name} ne peut pas s'avancer vers la gauche`
-        } else {
-          message = `${player.name} s'est avancé vers la gauche\n`
-        }
-        break
-    }
-
-    if (isMovementValid(step)) {
-      performMove(player, step)
-    }
-
-    if (message !== "") {
-      setLogs((prev) => [...prev, message])
-    }
-  }
+      return false
+    },
+    [map]
+  )
 
   /**
    * Makes the player state move and update the new board
    * @param player current player
    * @param step next movement
    */
-  const performMove = (player: Adventurer, step: Coordinates) => {
-    const onTreasure = isOnTreasure(step)
+  const performMove = useCallback(
+    (player: Adventurer, step: Coordinates) => {
+      const onTreasure = isOnTreasure(step)
 
-    if (onTreasure) {
-      dispatch(getTreasure({ adventurer: player }))
-      setLogs((prev) => [...prev, `${player.name} récupère un trésor`])
+      if (onTreasure) {
+        dispatch(getTreasure({ adventurer: player }))
+        setLogs((prev) => [...prev, `${player.name} récupère un trésor`])
+      }
+      dispatch(moveAdventurer({ adventurer: player, step }))
+      dispatch(updateBoard({ adventurer: player, step, onTreasure }))
+    },
+    [dispatch, isOnTreasure]
+  )
+
+  /**
+   * Determines which step the player will do according to its orientation
+   * @param player current player
+   */
+  const setNextMovement = useCallback(
+    (player: Adventurer): void => {
+      let message = ""
+      let step: Coordinates = { row: 0, column: 0 }
+
+      switch (player.orientation) {
+        case "N":
+          step = { row: player.pos.row - 1, column: player.pos.column }
+          if (!isMovementValid(step)) {
+            message = `${player.name} ne peut pas s'avancer vers le haut`
+          } else {
+            message = `${player.name} s'est avancé vers le haut\n`
+          }
+          break
+        case "E":
+          step = { row: player.pos.row, column: player.pos.column + 1 }
+          if (!isMovementValid(step)) {
+            message = `${player.name} ne peut pas s'avancer vers la droite`
+          } else {
+            message = `${player.name} s'est avancé vers la droite\n`
+          }
+          break
+        case "S":
+          step = { row: player.pos.row + 1, column: player.pos.column }
+          if (!isMovementValid(step)) {
+            message = `${player.name} ne peut pas s'avancer vers le bas`
+          } else {
+            message = `${player.name} s'est avancé vers le bas\n`
+          }
+          break
+        case "W":
+          step = { row: player.pos.row, column: player.pos.column - 1 }
+          if (!isMovementValid(step)) {
+            message = `${player.name} ne peut pas s'avancer vers la gauche`
+          } else {
+            message = `${player.name} s'est avancé vers la gauche\n`
+          }
+          break
+      }
+
+      if (isMovementValid(step)) {
+        performMove(player, step)
+      }
+
+      if (message !== "") {
+        setLogs((prev) => [...prev, message])
+      }
+    },
+    [isMovementValid, performMove]
+  )
+
+  /**
+   * Determines which action the player has to do (move/orientation)
+   * @param currentPlayer player whose turn it is
+   */
+  const parseMovement = useCallback(
+    (currentPlayer: Adventurer): void => {
+      const { movements } = currentPlayer
+      let message = ""
+      let newOrientation = ""
+
+      if (!movements[gameTurn]) return
+
+      switch (movements[gameTurn]) {
+        case "D":
+          newOrientation = setOrientation(currentPlayer.orientation, "D")
+          dispatch(
+            turnAdventurer({ adventurer: currentPlayer, newOrientation })
+          )
+          message = `${currentPlayer.name} s'oriente sur sa droite`
+          break
+        case "G":
+          newOrientation = setOrientation(currentPlayer.orientation, "G")
+          dispatch(
+            turnAdventurer({ adventurer: currentPlayer, newOrientation })
+          )
+          message = `${currentPlayer.name} s'oriente sur sa gauche`
+          break
+        case "A":
+          setNextMovement(currentPlayer)
+          break
+        default:
+          message = `${currentPlayer.name} tente un mouvement non autorisé`
+          break
+      }
+
+      if (message !== "") {
+        setLogs((prev) => [...prev, message])
+      }
+    },
+    [dispatch, gameTurn, setNextMovement]
+  )
+
+  /**
+   * Game player
+   */
+  const play = useCallback(() => {
+    const currentPlayer = adventurers[playerTurn]
+
+    parseMovement(currentPlayer)
+    dispatch(nextTurn())
+  }, [adventurers, dispatch, parseMovement, playerTurn])
+
+  // Start or stop the game based on the isPlaying state
+  useEffect(() => {
+    let intervalId: NodeJS.Timeout
+
+    if (isPlaying && !gameHasEnded) {
+      intervalId = setInterval(() => {
+        play()
+      }, 100)
     }
-    dispatch(moveAdventurer({ adventurer: player, step }))
-    dispatch(updateBoard({ adventurer: player, step, onTreasure }))
-  }
+
+    return () => clearInterval(intervalId)
+  }, [isPlaying, gameHasEnded, play])
 
   /**
    * Generates output file
@@ -262,14 +295,31 @@ const Game = () => {
       <Grid item xs={12}>
         <Stack spacing={2} direction="row">
           <Button
-            disabled={adventurers.length === 0 || gameHasEnded.valueOf()}
+            disabled={
+              adventurers.length === 0 || gameHasEnded.valueOf() || isPlaying
+            }
             onClick={play}
             variant="contained"
             size="small"
           >
-            Play
+            Step by step
           </Button>
-          <Button onClick={getOutputFile} variant="contained" size="small">
+          <Button
+            disabled={
+              adventurers.length === 0 || gameHasEnded.valueOf() || isPlaying
+            }
+            onClick={() => setIsPlaying(!isPlaying)}
+            variant="contained"
+            size="small"
+          >
+            Auto play
+          </Button>
+          <Button
+            disabled={!gameHasEnded.valueOf()}
+            onClick={getOutputFile}
+            variant="contained"
+            size="small"
+          >
             Output file
           </Button>
         </Stack>
