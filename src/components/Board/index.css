@@ -1,0 +1,26 @@
+table {
+    max-width: 80% !important;
+    width: fit-content !important;
+}
+  
+tr, td {
+    border: 0.25rem solid black;
+    width: 100px;
+    height: 100px;
+    text-align: center !important;
+    font-size: 1.5rem !important;
+    color: black !important;
+    font-weight: 800 !important;
+}
+  
+.plain {
+    background-color: green;
+}
+  
+.mountain {
+    background-color: grey;
+}
+  
+.treasure {
+    background-color: yellow;
+}
